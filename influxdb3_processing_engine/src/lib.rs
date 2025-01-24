@@ -1,3 +1,4 @@
+use crate::environment::PythonEnvironmentManager;
 use crate::manager::{ProcessingEngineError, ProcessingEngineManager};
 #[cfg(feature = "system-py")]
 use crate::plugins::PluginContext;
@@ -34,11 +35,11 @@ pub mod manager;
 pub mod plugins;
 
 #[cfg(feature = "system-py")]
-pub(crate) mod virtualenv;
+pub mod virtualenv;
 
 #[derive(Debug)]
 pub struct ProcessingEngineManagerImpl {
-    plugin_dir: Option<std::path::PathBuf>,
+    environment_manager: ProcessingEngineEnvironmentManager,
     catalog: Arc<Catalog>,
     write_buffer: Arc<dyn WriteBuffer>,
     query_executor: Arc<dyn QueryExecutor>,
@@ -218,7 +219,7 @@ impl ProcessingEngineManagerImpl {
             virtualenv::init_pyo3(&environment.virtual_env_location);
         }
         Self {
-            plugin_dir: environment.plugin_dir,
+            environment_manager: environment,
             catalog,
             write_buffer,
             query_executor,
@@ -252,7 +253,11 @@ impl ProcessingEngineManagerImpl {
         }
 
         // otherwise we assume it is a local file
-        let plugin_dir = self.plugin_dir.clone().context("plugin dir not set")?;
+        let plugin_dir = self
+            .environment_manager
+            .plugin_dir
+            .clone()
+            .context("plugin dir not set")?;
         let plugin_path = plugin_dir.join(name);
 
         // read it at least once to make sure it's there
@@ -331,7 +336,7 @@ impl ProcessingEngineManager for ProcessingEngineManagerImpl {
         plugin_type: PluginType,
     ) -> Result<(), ProcessingEngineError> {
         // first verify that we can read the file
-        match &self.plugin_dir {
+        match &self.environment_manager.plugin_dir {
             Some(plugin_dir) => {
                 let path = plugin_dir.join(&file_name);
                 if !path.exists() {
@@ -785,6 +790,10 @@ impl ProcessingEngineManager for ProcessingEngineManagerImpl {
             error!(%e, "error receiving response from plugin");
             ProcessingEngineError::RequestHandlerDown
         })?)
+    }
+
+    fn get_environment_manager(&self) -> Arc<dyn PythonEnvironmentManager> {
+        Arc::clone(&self.environment_manager.package_manager)
     }
 }
 
