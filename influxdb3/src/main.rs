@@ -29,6 +29,7 @@ mod commands {
     pub mod query;
     pub mod serve;
     pub mod show;
+    pub mod system;
     pub mod test;
     pub mod write;
 }
@@ -104,6 +105,9 @@ enum Command {
 
     /// List resources on the InfluxDB 3 Core server
     Show(commands::show::Config),
+
+    /// Provide access to system tables via subcommands.
+    System(commands::system::Config),
 
     /// Test things, such as plugins, work the way you expect
     Test(commands::test::Config),
@@ -189,6 +193,12 @@ fn main() -> Result<(), std::io::Error> {
             Some(Command::Write(config)) => {
                 if let Err(e) = commands::write::command(config).await {
                     eprintln!("Write command failed: {e}");
+                    std::process::exit(ReturnCode::Failure as _)
+                }
+            }
+            Some(Command::System(config)) => {
+                if let Err(e) = commands::system::command(config).await {
+                    eprintln!("System command failed: {e}");
                     std::process::exit(ReturnCode::Failure as _)
                 }
             }
